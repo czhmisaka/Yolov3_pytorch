@@ -57,6 +57,14 @@ def read_test():
 
 
 def get_all_wh(txt, img_size=416):
+    """
+    从 txt 文件中读取 xml 位置，并读取所有 xml
+    取出所有图片中真实框的长宽信息
+    并将他们以图片缩放的对应倍数缩放至正确大小
+    :param txt: 图片记录文件的path
+    :param img_size: 图片要缩放的尺寸
+    :return: 所有图片中所有真实框的长宽
+    """
     ann_list = []
     with open(txt, 'r') as f:
         for line in f:
@@ -85,13 +93,25 @@ def get_all_wh(txt, img_size=416):
     return all_size
 
 
-def iou(size1, size2):
-    union = np.minimum(size1[:, 0], size2[0]) * np.minimum(size1[:, 1], size2[1])
-    intersection = size1[:, 0] * size1[:, 1] + size2[0] * size2[1] - union + 1e-10
-    return union / intersection
+def iou(sizes, cluster):
+    """
+    计算所有真实框与聚类中心的 IoU
+    :param sizes: 真实框的长宽信息
+    :param cluster: 聚类中心的长宽信息
+    :return: IoU
+    """
+    intersection = np.minimum(sizes[:, 0], cluster[0]) * np.minimum(sizes[:, 1], cluster[1])
+    union = sizes[:, 0] * sizes[:, 1] + cluster[0] * cluster[1] - intersection + 1e-10
+    return intersection / union
 
 
 def anchor_box_k_mean(img_size=416, k=9):
+    """
+    使用 k-means 将真实框进行聚类
+    :param img_size: 训练时图片大小
+    :param k: 聚类中心个数
+    :return: 聚类中心
+    """
     all_size = get_all_wh('train.txt', img_size)
 
     res = np.array(all_size)
@@ -113,13 +133,24 @@ def anchor_box_k_mean(img_size=416, k=9):
         for i in range(k):
             clusters[i, :] = np.median(res[last == i], axis=0)
 
-    return clusters
+    avg_iou = np.mean(np.max(1-distance, axis=1))
+    anchors = clusters.astype('int').tolist()
+
+    anchors = sorted(anchors, key=lambda x: x[0] * x[1])
+    print(anchors, '\navg_iou=', avg_iou)
+    return anchors
 
 
 if __name__ == '__main__':
     # read_train_val()
     # read_test()
-    anchor_box_k_mean(416, 9)
+    anchors = anchor_box_k_mean(416, 9)
+
+    with open('anchors.txt', 'w') as f:
+        for [w, h] in anchors:
+            f.write(''.join([str(w), ' ', str(h), '\r\n']))
+
+
 
 
 
